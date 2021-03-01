@@ -11,6 +11,10 @@ import numpy as np
 import cv2
 import threading
 import aiohttp
+import dlib
+import socketio
+import numba
+from numba import jit
 
 from aiohttp import web
 from av import VideoFrame
@@ -25,23 +29,29 @@ from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
 
 pcs = set()
 
+# keras 코드 warning 숨기기
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 """
 ===================================================================================================================================================================================================
 """
 
 Std_INFO = {
-    "test_id":30,
-    "s_email":"1"
+    "test_id":44,
+    "s_number":21
 }
 
 res = {
-    "s_email":"",                               # 학생 고유 키 값
+    "s_number":"",                               # 학생 고유 키 값
     "eye_caution":0                           # 부정행위 감지 카운트
 }
 
 # python <-> node.js 간 post 통신에 필요한 헤더 값
 headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+text = ""
+sio = socketio.Client()
+sio.connect('http://3.89.30.234:3001')
 
 faceFlag = True
 trackingFlag = True
@@ -49,7 +59,6 @@ flag = False
 count = 0
 URL_EYE = "http://3.89.30.234:3000/eyetracking"
 ang1, ang2 = 0, 0
-eye_caution = 0
 size = [480, 640, 3]            # [0]:height, [1]:width, [2]:rgb
 
 model_points = np.array([
@@ -70,7 +79,6 @@ camera_matrix = np.array(
      [0, 0, 1]], dtype="double"
 )
 
-
 # 부정행위 카운트
 def state():
     global count
@@ -86,6 +94,11 @@ def face():
         faceFlag = True
         trackingFlag = True
     threading.Timer(0.25, face).start()
+
+class Student:
+    def __init__(self, s_number):
+        self.s_number = s_number
+        self.eye_caution = 0
 
 class FaceDetector:
 
@@ -289,92 +302,112 @@ def draw_annotation_box(img, rotation_vector, translation_vector, camera_matrix,
 ==========================================================================================================================================================================================
 """
 
-def eyetracking(frame, s_number):
-
-    global count, flag, ang1, ang2, eye_caution, faceFlag, trackingFlag
+async def eye(frame):
+    global count, flag, ang1, ang2, faceFlag, trackingFlag, host, port, sio, text
 
     video = frame
+    gaze.refresh(video)
+    #video = gaze.annotated_frame()
+    text = ""
+
+    if gaze.is_top():
+        text = "Top"
+    elif gaze.is_right():
+        text = "Right"
+    elif gaze.is_left():
+        text = "Left"
+    elif gaze.is_center():
+        text = "Center"
+
+    #print(text)
+    cv2.putText(video, text, (90, 60), cv2.FONT_HERSHEY_DUPLEX, 1.6, (147, 58, 31), 2)
+    return text
+
+
+async def faceRecog(frame):
+    global count, flag, ang1, ang2, faceFlag, trackingFlag, host, port, sio
+    video = frame
+
+    faceboxes = mark_detector.extract_cnn_facebox(video)
+    for facebox in faceboxes:
+        face_img = video[facebox[1]: facebox[3],
+                   facebox[0]: facebox[2]]
+        face_img = cv2.resize(face_img, (128, 128))
+        face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+        marks = mark_detector.detect_marks([face_img])
+        marks *= (facebox[2] - facebox[0])
+        marks[:, 0] += facebox[0]
+        marks[:, 1] += facebox[1]
+        shape = marks.astype(np.uint)
+
+        # 얼굴 점 찍기
+        # mark_detector.draw_marks(video, marks, color=(0, 255, 0))
+
+        image_points = np.array([
+            shape[30],  # 코끝
+            shape[8],  # 턱
+            shape[36],  # 왼쪽 눈 왼쪽 끝
+            shape[45],  # 오른쪽 눈 오른쪽 끝
+            shape[48],  # 입술 왼쪽
+            shape[54]  # 입술 오른쪽
+        ], dtype="double")
+        dist_coeffs = np.zeros((4, 1))
+
+        (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points, image_points, camera_matrix,
+                                                                      dist_coeffs, flags=cv2.SOLVEPNP_UPNP)
+
+        # (success, rotation_vector, translation_vector) = Process(target=cv2.solvePnP, args=(model_points, image_points, camera_matrix,dist_coeffs, cv2.SOLVEPNP_UPNP)).start()
+
+        (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), rotation_vector,
+                                                         translation_vector, camera_matrix, dist_coeffs)
+
+        # (nose_end_point2D, jacobian) = Process(target=cv2.projectPoints, args=(np.array([(0.0, 0.0, 1000.0)]), rotation_vector,translation_vector, camera_matrix, dist_coeffs)).start()
+
+        # for p in image_points:
+        # cv2.circle(img, (int(p[0]), int(p[1])), 3, (0, 0, 255), -1)
+        # cv2.putText(img, str(p), (int(p[0]), int(p[1])), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255), 2)
+
+        p1 = (int(image_points[0][0]), int(image_points[0][1]))
+        p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
+        x1, x2 = draw_annotation_box(video, rotation_vector, translation_vector, camera_matrix)
+
+        # 선 표시
+        # cv2.line(img, p1, p2, (0, 255, 255), 2)
+        # cv2.line(img, tuple(x1), tuple(x2), (255, 255, 0), 2)
+
+        # x축 각도 계산
+        try:
+            m = (p2[1] - p1[1]) / (p2[0] - p1[0])
+            ang1 = int(math.degrees(math.atan(m)))
+        except:
+            ang1 = 90
+
+        # y축 각도 계산
+        try:
+            m = (x2[1] - x1[1]) / (x2[0] - x1[0])
+            ang2 = int(math.degrees(math.atan(-1 / m)))
+        except:
+            ang2 = 90
+
+        # x축
+        cv2.putText(video, str(ang1), tuple(p1), font, 2, (128, 255, 255), 3)
+        # y축
+        cv2.putText(video, str(ang2), tuple(x1), font, 2, (255, 255, 128), 3)
+
+
+async def eyetracking(frame, s_number):
+
+    global count, flag, ang1, ang2, faceFlag, trackingFlag, host, port, sio, text
+
+    video = frame
+    std = Student(s_number)
 
     if trackingFlag:
-        gaze.refresh(video)
-        #video = gaze.annotated_frame()
-        text = ""
 
-        if gaze.is_right():
-            text = "Right"
-        elif gaze.is_left():
-            text = "Left"
-        elif gaze.is_top():
-            text = "Top"
-        elif gaze.is_center():
-            text = "Center"
+        text = await eye(frame)
+        await faceRecog(frame)
 
-        print(text)
-        cv2.putText(video, text, (90, 60), cv2.FONT_HERSHEY_DUPLEX, 1.6, (147, 58, 31), 2)
-
-
-        faceboxes = mark_detector.extract_cnn_facebox(video)
-        for facebox in faceboxes:
-            face_img = video[facebox[1]: facebox[3],
-                       facebox[0]: facebox[2]]
-            face_img = cv2.resize(face_img, (128, 128))
-            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
-            marks = mark_detector.detect_marks([face_img])
-            marks *= (facebox[2] - facebox[0])
-            marks[:, 0] += facebox[0]
-            marks[:, 1] += facebox[1]
-            shape = marks.astype(np.uint)
-
-            # 얼굴 점 찍기
-            # mark_detector.draw_marks(img, marks, color=(0, 255, 0))
-
-            image_points = np.array([
-                shape[30],  # 코끝
-                shape[8],  # 턱
-                shape[36],  # 왼쪽 눈 왼쪽 끝
-                shape[45],  # 오른쪽 눈 오른쪽 끝
-                shape[48],  # 입술 왼쪽
-                shape[54]  # 입술 오른쪽
-            ], dtype="double")
-            dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
-            (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points, image_points, camera_matrix,
-                                                                          dist_coeffs, flags=cv2.SOLVEPNP_UPNP)
-
-            (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), rotation_vector,
-                                                             translation_vector, camera_matrix, dist_coeffs)
-
-            # for p in image_points:
-            # cv2.circle(img, (int(p[0]), int(p[1])), 3, (0, 0, 255), -1)
-            # cv2.putText(img, str(p), (int(p[0]), int(p[1])), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255), 2)
-
-            p1 = (int(image_points[0][0]), int(image_points[0][1]))
-            p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
-            x1, x2 = draw_annotation_box(video, rotation_vector, translation_vector, camera_matrix)
-
-            # 선 표시
-            # cv2.line(img, p1, p2, (0, 255, 255), 2)
-            # cv2.line(img, tuple(x1), tuple(x2), (255, 255, 0), 2)
-
-            # x축 각도 계산
-            try:
-                m = (p2[1] - p1[1]) / (p2[0] - p1[0])
-                ang1 = int(math.degrees(math.atan(m)))
-            except:
-                ang1 = 90
-
-            # y축 각도 계산
-            try:
-                m = (x2[1] - x1[1]) / (x2[0] - x1[0])
-                ang2 = int(math.degrees(math.atan(-1 / m)))
-            except:
-                ang2 = 90
-
-            # x축
-            cv2.putText(video, str(ang1), tuple(p1), font, 2, (128, 255, 255), 3)
-            # y축
-            cv2.putText(video, str(ang2), tuple(x1), font, 2, (255, 255, 128), 3)
-
-        if int(ang1) > 35 or int(ang1) < -35 or int(ang2) > 30:
+        if int(ang1) > 40 or int(ang1) < -40 or int(ang2) > 30:
             flag = True
         elif text == "Center":
             count = 0
@@ -382,17 +415,20 @@ def eyetracking(frame, s_number):
         else:
             flag = True
 
-        if count >= 2:
+        if count >= 3:
+            print(std.s_number)
             video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
+            sio.emit("eyetracking", Std_INFO)
+
             #response = requests.post(url=URL_EYE, data=json.dumps(Std_INFO), headers=headers)
             #res = json.loads(response.text)
             #print(res)
-            eye_caution += 1
-            print(eye_caution)
+            std.eye_caution += 1
+            print(str(s_number) + " : " + str(std.eye_caution))
             count = 0
 
-        cv2.imshow(str(s_number) + 'eye', video)
-        cv2.waitKey(1) & 0xFF
+        #cv2.imshow(str(s_number) + 'eye', video)
+        #cv2.waitKey(1) & 0xFF
         trackingFlag = False
 
 
@@ -416,16 +452,19 @@ class VideoTransformTrack(MediaStreamTrack):
         self.s_number = s_number
 
     async def recv(self):
+        global text
         frame = await self.track.recv()
         img = frame.to_ndarray(format="bgr24")      # videoframe reformat to ndarray
         rows = img.shape[0]
         height = img.shape[1]
         rgb = img.shape[2]
         test = np.full((rows, height, rgb), img, np.uint8)   # ndarray to image data for openCV
-        print(self.s_number)
-        eyetracking(test, self.s_number)
-        cv2.imshow(str(self.s_number),test)
-        cv2.waitKey(1) & 0xFF
+        await eyetracking(test, self.s_number)
+        #Process(target=eyetracking, args=(test, self.s_number)).start()
+        # Janus 영상 출력
+        print("x : ", ang1, "y : ", ang2, "Look : ", text)
+        #cv2.imshow(str(self.s_number),test)
+        #cv2.waitKey(1) & 0xFF
         return frame
 
 class JanusPlugin:
@@ -511,21 +550,24 @@ class JanusSession:
 async def subscribe(session, room, feed, s_number):
     pc = RTCPeerConnection()
     pcs.add(pc)
-    print(session, feed)
+
+
     @pc.on("track")
     async def on_track(track):
         print("Track %s received" % track.kind)
         if track.kind == "video":
             while True:
+                #Process(target=await VideoTransformTrack(track, s_number).recv).start()
                 await VideoTransformTrack(track, s_number).recv()
     # subscribe
     plugin = await session.attach("janus.plugin.videoroom")
     response = await plugin.send(
         {"body": {"request": "join", "ptype": "subscriber", "room": room, "feed": feed}}
     )
-
+    print(response)
     # apply offer
     await pc.setRemoteDescription(
+
         RTCSessionDescription(
             sdp=response["jsep"]["sdp"], type=response["jsep"]["type"]
         )
@@ -547,7 +589,8 @@ async def subscribe(session, room, feed, s_number):
 
 async def run(player, recorder, room, session):
     await session.create()
-
+    room_num = room
+    print(room_num)
     # join video room
     plugin = await session.attach("janus.plugin.videoroom")
     response = await plugin.send(
@@ -571,19 +614,29 @@ async def run(player, recorder, room, session):
     print(maxlength)
 
     # receive video
-    for index in range(0, maxlength):
-        if int(publishers[index]['display']) % 3 is 0:      # 학생별 display 값을 검사해서 webcam 스트림만 가져온다
-            await subscribe(
-                session=session, room=room, feed=publishers[index]["id"], s_number=publishers[index]["display"]
-            )
+    if maxlength is 0:
+        print('x')
+    else:
+        for index in range(0, maxlength):
+            if publishers[index]['display'] == "null":
+                pass
+            else:
+                if int(publishers[index]['display']) % 21 is 0:
+                    await subscribe(
+                        session=session, room=room_num, feed=publishers[index]["id"], s_number=publishers[index]["display"]
+                    )
+                    #Process(target=subscribe, args=(session, room, publishers[index]["id"], publishers[index]["display"])).start()
 
 
     # exchange media for 10 minutes
     #print("Exchanging media")
-    #await asyncio.sleep(1)
+    await asyncio.sleep(600)
 
 
 if __name__ == "__main__":
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+
     parser = argparse.ArgumentParser(description="Janus")
     parser.add_argument("url", help="Janus root URL, e.g. http://localhost:8088/janus")
     parser.add_argument(
@@ -596,6 +649,7 @@ if __name__ == "__main__":
     parser.add_argument("--record-to", help="Write received media to a file."),
     parser.add_argument("--verbose", "-v", action="count")
     args = parser.parse_args()
+    print(parser)
 
     mark_detector = MarkDetector()
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -628,6 +682,8 @@ if __name__ == "__main__":
         run(player=player, recorder=recorder, room=args.room, session=session)
     )
     loop.run_forever()
+    #p1 = Process(target=loop.run_forever)
+    #p1.start()
     # except KeyboardInterrupt:
     #     pass
     # finally:
