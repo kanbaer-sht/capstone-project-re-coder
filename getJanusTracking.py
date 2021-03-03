@@ -35,6 +35,7 @@ std_eye = {
 }
 
 std_cnt = {
+    "s_number":0,
     "count":0,
     "eye_caution":0
 }
@@ -89,13 +90,11 @@ class VideoTransformTrack(MediaStreamTrack):
         size_mat[2] = img.shape[2]
         test = np.full(size_mat, img, np.uint8)     # ndarray to image data for openCV
 
-
         if trackingFlag and std_cnt["eye_caution"] <= 3:
             trackingFlag = False
             text = eye.eyetracking(frame=test, s_number=self.s_number, eye_count=std_cnt["count"],
                             eye_caution=std_cnt["eye_caution"], size=size_mat)
-            #print(text)
-            #print(std_cnt["eye_caution"])
+
             if text == "count up":
                 std_cnt["count"] += 1
                 print(std_dic)
@@ -110,7 +109,7 @@ class VideoTransformTrack(MediaStreamTrack):
                 std_cnt["eye_caution"] += 1
                 print(std_dic)
                 print(std_eye)
-
+        cv2.putText(test, str(std_cnt["eye_caution"]), (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 2, (128,255,255),3)
         cv2.imshow(str(self.s_number) + 'janus', test)
         cv2.waitKey(1) & 0xFF
         return frame
@@ -256,10 +255,11 @@ async def run(player, recorder, room, session, test_id, s_number):
         print("id: %(id)s, display: %(display)s" % publisher)
 
     maxlength = len(publishers)
+    print(s_number, ' stream')
 
     # receive video
     if maxlength is s_number:
-        print('x')
+        print('no stream on janus')
     else:
         for index in range(0, maxlength):
             std_id = int(publishers[index]['display'])
@@ -280,15 +280,8 @@ async def run(player, recorder, room, session, test_id, s_number):
                     await subscribe(
                         session=session, room=room, feed=publishers[index]["id"], s_number=std_id
                     )
-                elif std_id % 3 is 0:
-                    std_dic[std_id] = {
-                        "test_id": test_id,
-                        "s_number": std_id,
-                    }
-                    std_eye[std_id] = {
-                        "s_number": std_id,
-                        "eye_caution": 0
-                    }
+                else:
+                    print("can't find s_number's stream")
 
 def janus_connection(url, room, test_id, s_number):
 
@@ -297,7 +290,7 @@ def janus_connection(url, room, test_id, s_number):
     face()
     player = None
     recorder = None
-
+    #asyncio.set_event_loop(loop)
     loop = asyncio.get_event_loop()
 
     task = loop.run_until_complete(
