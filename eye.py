@@ -60,6 +60,8 @@ flag = False
 count = 0
 ang1, ang2 = 0, 0
 text = ""
+p1 = 0
+p2 = 0
 
 # 3d 모델 각 점 위치
 model_points = np.array([
@@ -323,7 +325,7 @@ def eye(frame):
 
 # 얼굴 인식 및 각도 측정 함수
 def faceRecog(frame, camera_matrix):
-    global ang1, ang2,mark_detector, font
+    global ang1, ang2,mark_detector, font, p1, p2
     video = frame
 
     faceboxes = mark_detector.extract_cnn_facebox(video)
@@ -399,7 +401,11 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 gaze = GazeTracking()
 mark_detector = MarkDetector()
 
-def eyetracking(frame, room, s_number, eye_count, eye_caution, size):
+@sio.on('eyetrackingcount')
+async def eyetrackingcount(msg):
+    print(msg)
+
+def eyetracking(frame, test_id, s_number, eye_count, eye_caution, size):
     global flag, ang1, ang2, faceFlag, trackingFlag, sio, text, font, Std_INFO
 
     # 카메라 정보
@@ -413,44 +419,48 @@ def eyetracking(frame, room, s_number, eye_count, eye_caution, size):
 
     #print('eye_count : ',eye_count)
     #print('eye_caution : ',eye_caution)
-
+    print(text)
     video = frame
 
     text = eye(frame)
     faceRecog(frame, camera_matrix)
 
-    print(text)
-
-    cv2.imshow(str(s_number) + 'eye', video)
-    cv2.waitKey(1) & 0xFF
+    #cv2.imshow(str(s_number) + 'eye', video)
+    #cv2.waitKey(1) & 0xFF
 
     # 3초 이상 바깥응시, 고개 돌아간 상황
-    if eye_count >= 15 and eye_caution < 4:
+    if eye_count >= 25 and eye_caution <= 4:
         print("부정행위가 발생했습니다!")
         video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
         eye_caution += 1
 
-        if eye_caution < 4:
+        if eye_caution >= 0:
             Std_INFO = {
-                'test_id':room,
+                'test_id':test_id,
                 's_number':s_number
             }
             sio.emit("eyetracking", Std_INFO)
             print(s_number, ':', eye_caution)
+
+
             Std_INFO = {
 
             }
 
-        cv2.imshow(str(s_number) + 'eye', video)
-        cv2.waitKey(1) & 0xFF
+        #cv2.imshow(str(s_number) + 'eye', video)
+        #cv2.waitKey(1) & 0xFF
 
         return "caution up"
     else:
-        cv2.imshow(str(s_number) + 'eye', video)
-        cv2.waitKey(1) & 0xFF
-
+        pass
+        #cv2.imshow(str(s_number) + 'eye', video)
+        #cv2.waitKey(1) & 0xFF
+    # x축
+    #cv2.putText(str(s_number) + 'janus', str(ang1), tuple(p1), font, 2, (128, 255, 255), 3)
+    # y축
+    #cv2.putText(str(s_number) + 'janus', str(ang2), tuple(x1), font, 2, (255, 255, 128), 3)
     # 부정행위가 발생했을 때, 시간 카운트 플래그 설정 후 리턴
-    if int(ang1) > 45 or int(ang1) < -45 or int(ang2) > 30:
+    if int(ang1) > 35 or int(ang1) < -35 or int(ang2) > 30:
         flag = True
         return "count up"
     elif text == "Center":

@@ -74,10 +74,11 @@ class VideoTransformTrack(MediaStreamTrack):
     """
     kind = "video"
 
-    def __init__(self, track, s_number):
+    def __init__(self, track, s_number, test_id):
         super().__init__()  # don't forget this!
         self.track = track
         self.s_number = s_number
+        self.test_id = test_id
 
     async def recv(self):
 
@@ -92,13 +93,19 @@ class VideoTransformTrack(MediaStreamTrack):
 
         if trackingFlag and std_cnt["eye_caution"] <= 3:
             trackingFlag = False
-            text = eye.eyetracking(frame=test, room=50, s_number=self.s_number, eye_count=std_cnt["count"],
+
+            text = eye.eyetracking(frame=test, test_id=self.test_id, s_number=self.s_number, eye_count=std_cnt["count"],
                             eye_caution=std_cnt["eye_caution"], size=size_mat)
 
+            print(std_cnt["count"])
             if text == "count up":
                 std_cnt["count"] += 1
+                print(std_dic)
+                print(std_eye)
             elif text == "count reset":
                 std_cnt["count"] = 0
+                print(std_dic)
+                print(std_eye)
             elif text == "caution up":
                 std_cnt["count"] = 0
                 std_eye[self.s_number]["eye_caution"] += 1
@@ -190,7 +197,7 @@ class JanusSession:
                     else:
                         print(data)
 
-async def subscribe(session, room, feed, s_number):
+async def subscribe(session, room, feed, s_number, test_id):
     pc = RTCPeerConnection()
     pcs.add(pc)
     s_num = s_number
@@ -199,7 +206,7 @@ async def subscribe(session, room, feed, s_number):
         print("Track %s received" % track.kind)
         if track.kind == "video":
             while True:
-                await VideoTransformTrack(track, s_num).recv()
+                await VideoTransformTrack(track, s_num, test_id).recv()
 
     # subscribe
     plugin = await session.attach("janus.plugin.videoroom")
@@ -253,7 +260,7 @@ async def run(player, recorder, room, session, test_id, s_number):
 
     maxlength = len(publishers)
     print(s_number, ' stream')
-
+    test_num = test_id
     # receive video
     if maxlength is s_number:
         print('no stream on janus')
@@ -275,7 +282,7 @@ async def run(player, recorder, room, session, test_id, s_number):
                     print(std_dic)
                     print(std_eye)
                     await subscribe(
-                        session=session, room=room, feed=publishers[index]["id"], s_number=std_id
+                        session=session, room=room, feed=publishers[index]["id"], s_number=std_id, test_id=test_num
                     )
 
 def janus_connection(url, room, test_id, s_number):
