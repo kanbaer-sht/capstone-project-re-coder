@@ -424,7 +424,6 @@ async def eyetracking(frame, s_number):
             print("부정행위가 발생했습니다!")
             video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
             if eye_caution < 4:
-                print(eye_caution)
                 sio.emit("eyetracking", Std_INFO)
                 eye_caution += 1
                 #response = requests.post(url=URL_EYE, data=json.dumps(Std_INFO), headers=headers)
@@ -625,7 +624,7 @@ async def run(player, recorder, room, session, test_id):
             if publishers[index]['display'] == "null":
                 pass
             else:
-                if int(publishers[index]['display']) % 21 is 0:
+                if int(publishers[index]['display']) % 21 is 0 or int(publishers[index]['display']) % 22 is 0:
                     std_list.append(Student(s_number=publishers[index]["display"], test_id=test_id))
                     print(std_list[-1])
                     await subscribe(
@@ -639,7 +638,8 @@ async def run(player, recorder, room, session, test_id):
     await asyncio.sleep(600)
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
+def janusTracking():
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 

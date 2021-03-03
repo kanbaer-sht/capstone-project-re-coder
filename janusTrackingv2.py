@@ -37,9 +37,17 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 """
 std_list = []
 
+std_dic = {
+
+}
+
+std_eye = {
+
+}
+
 Std_INFO = {
     "test_id":50,
-    "s_number":21
+    "s_number":27
 }
 
 res = {
@@ -403,7 +411,7 @@ async def faceRecog(frame):
 async def eyetracking(frame, s_number):
 
     global count, flag, ang1, ang2, faceFlag, trackingFlag, sio, text, eye_caution
-
+    s_num = s_number
     video = frame
     #std = Student(s_number)
 
@@ -424,9 +432,9 @@ async def eyetracking(frame, s_number):
             print("부정행위가 발생했습니다!")
             video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
             if eye_caution < 4:
-                print(eye_caution)
                 sio.emit("eyetracking", Std_INFO)
-                eye_caution += 1
+                std_eye[s_number]['eye_caution'] += 1
+                print(std_eye[s_number]["s_number"], ':', std_eye[s_number]['eye_caution'])
                 #response = requests.post(url=URL_EYE, data=json.dumps(Std_INFO), headers=headers)
                 #res = json.loads(response.text)
                 #print(res)
@@ -465,9 +473,7 @@ class VideoTransformTrack(MediaStreamTrack):
         rgb = img.shape[2]
         test = np.full((rows, height, rgb), img, np.uint8)   # ndarray to image data for openCV
         await eyetracking(test, self.s_number)
-        #PrProcessocess(target=eyetracking, args=(test, self.s_number)).start()
-        # Janus 영상 출력
-        #print("x : ", ang1, "y : ", ang2, "Look : ", text)
+
         cv2.imshow(str(self.s_number) + 'janus', test)
         cv2.waitKey(1) & 0xFF
         return frame
@@ -556,19 +562,19 @@ async def subscribe(session, room, feed, s_number):
     pc = RTCPeerConnection()
     pcs.add(pc)
 
-
     @pc.on("track")
     async def on_track(track):
         print("Track %s received" % track.kind)
         if track.kind == "video":
             while True:
-                #Process(target=await VideoTransformTrack(track, s_number).recv).start()
                 await VideoTransformTrack(track, s_number).recv()
+
     # subscribe
     plugin = await session.attach("janus.plugin.videoroom")
     response = await plugin.send(
         {"body": {"request": "join", "ptype": "subscriber", "room": room, "feed": feed}}
     )
+
     #print(response)
     # apply offer
     await pc.setRemoteDescription(
@@ -593,6 +599,7 @@ async def subscribe(session, room, feed, s_number):
     #await recorder.start()
 
 async def run(player, recorder, room, session, test_id):
+    pubcount = 0
     await session.create()
 
     # join video room
@@ -615,28 +622,35 @@ async def run(player, recorder, room, session, test_id):
 
     maxlength = len(publishers)
 
-    print(maxlength)
-
     # receive video
     if maxlength is 0:
         print('x')
     else:
         for index in range(0, maxlength):
-            if publishers[index]['display'] == "null":
+            std_id = int(publishers[index]['display'])
+            if std_id == "null":
                 pass
             else:
-                if int(publishers[index]['display']) % 21 is 0:
-                    std_list.append(Student(s_number=publishers[index]["display"], test_id=test_id))
-                    print(std_list[-1])
+
+                if std_id % 21 is 0:
+                    std_dic[std_id] = {
+                        "test_id" : test_id,
+                        "s_number": std_id,
+                    }
+                    std_eye[std_id] = {
+                        "s_number" : std_id,
+                        "eye_caution": 0
+                    }
+                    print(std_dic)
+                    print(std_eye)
                     await subscribe(
-                        session=session, room=room, feed=publishers[index]["id"], s_number=publishers[index]["display"]
+                        session=session, room=room, feed=publishers[index]["id"], s_number=std_id
                     )
-                    #Process(target=subscribe, args=(session, room, publishers[index]["id"], publishers[index]["display"])).start()
 
 
     # exchange media for 10 minutes
     #print("Exchanging media")
-    await asyncio.sleep(600)
+    #await asyncio.sleep(600)
 
 
 if __name__ == "__main__":

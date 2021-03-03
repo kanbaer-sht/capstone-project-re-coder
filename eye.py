@@ -37,6 +37,14 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 """
 std_list = []
 
+std_dic = {
+
+}
+
+std_eye = {
+
+}
+
 Std_INFO = {
     "test_id":50,
     "s_number":21
@@ -50,17 +58,14 @@ res = {
 
 text = ""
 
-sio = socketio.Client()
-sio.connect('http://3.89.30.234:3001')
-eye_caution = 0
+#sio = socketio.Client()
+#sio.connect('http://3.89.30.234:3001')
 faceFlag = True
 trackingFlag = True
 flag = False
 count = 0
-URL_EYE = "http://3.89.30.234:3000/eyetracking"
 ang1, ang2 = 0, 0
-
-size = [480, 640, 3]            # [0]:height, [1]:width, [2]:rgb
+text = ""
 
 # 3d 모델 각 점 위치
 model_points = np.array([
@@ -72,14 +77,6 @@ model_points = np.array([
         (150.0, -150.0, -125.0)  # 입 오른쪽 끝
     ])
 
-# 카메라 정보
-focal_length = size[1]
-center = (size[1] / 2, size[0] / 2)  # width / 2, height / 2
-camera_matrix = np.array(
-    [[focal_length, 0, center[0]],
-     [0, focal_length, center[1]],
-     [0, 0, 1]], dtype="double"
-)
 
 # 부정행위 카운트
 def state():
@@ -306,8 +303,10 @@ def draw_annotation_box(img, rotation_vector, translation_vector, camera_matrix,
 """
 
 # 눈 방향 감지 함수
-async def eye(frame):
-    global count, flag, ang1, ang2, faceFlag, trackingFlag, host, port, sio, text
+def eye(frame):
+    global count, flag, ang1, ang2, faceFlag, trackingFlag, sio, text, gaze, font
+
+
 
     video = frame
     gaze.refresh(video)
@@ -329,8 +328,8 @@ async def eye(frame):
 
 
 # 얼굴 인식 및 각도 측정 함수
-async def faceRecog(frame):
-    global count, flag, ang1, ang2, faceFlag, trackingFlag, host, port, sio
+def faceRecog(frame, camera_matrix):
+    global ang1, ang2,mark_detector, font
     video = frame
 
     faceboxes = mark_detector.extract_cnn_facebox(video)
@@ -400,304 +399,71 @@ async def faceRecog(frame):
         cv2.putText(video, str(ang2), tuple(x1), font, 2, (255, 255, 128), 3)
 
 
-async def eyetracking(frame, s_number):
+detector = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+font = cv2.FONT_HERSHEY_SIMPLEX
+gaze = GazeTracking()
+mark_detector = MarkDetector()
 
-    global count, flag, ang1, ang2, faceFlag, trackingFlag, sio, text, eye_caution
+def eyetracking(frame, s_number, eye_count, eye_caution, size):
+    global flag, ang1, ang2, faceFlag, trackingFlag, sio, text, font
+
+    # 카메라 정보
+    focal_length = size[1]
+    center = (size[1] / 2, size[0] / 2)  # width / 2, height / 2
+    camera_matrix = np.array(
+        [[focal_length, 0, center[0]],
+         [0, focal_length, center[1]],
+         [0, 0, 1]], dtype="double"
+    )
+
+    print('eye_count : ',eye_count)
+    #print('eye_caution : ',eye_caution)
 
     video = frame
-    #std = Student(s_number)
 
-    if trackingFlag:
+    text = eye(frame)
+    faceRecog(frame, camera_matrix)
 
-        text = await eye(frame)
-        await faceRecog(frame)
+    print(text)
 
-        if int(ang1) > 45 or int(ang1) < -45 or int(ang2) > 30:
-            flag = True
-        elif text == "Center":
-            count = 0
-            flag = False
-        else:
-            flag = True
+    cv2.imshow(str(s_number) + 'eye', video)
+    cv2.waitKey(1) & 0xFF
 
-        if count >= 5:
-            print("부정행위가 발생했습니다!")
-            video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
-            if eye_caution < 4:
-                print(eye_caution)
-                sio.emit("eyetracking", Std_INFO)
-                eye_caution += 1
-                #response = requests.post(url=URL_EYE, data=json.dumps(Std_INFO), headers=headers)
-                #res = json.loads(response.text)
-                #print(res)
-                count = 0
+    # 3초 이상 바깥응시, 고개 돌아간 상황
+    if eye_count >= 15:
+        print("부정행위가 발생했습니다!")
+        video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
+        eye_caution += 1
+
+        if eye_caution < 4:
+            #sio.emit("eyetracking", Std_INFO)
+            print(s_number, ':', eye_caution)
 
         cv2.imshow(str(s_number) + 'eye', video)
         cv2.waitKey(1) & 0xFF
-        trackingFlag = False
 
-
-"""
-==========================================================================================================================================================================================
-"""
-
-
-def transaction_id():
-    return "".join(random.choice(string.ascii_letters) for x in range(12))
-
-class VideoTransformTrack(MediaStreamTrack):
-    """
-    A video stream track that transforms frames from an another track.
-    """
-    kind = "video"
-
-    def __init__(self, track, s_number):
-        super().__init__()  # don't forget this!
-        self.track = track
-        self.s_number = s_number
-
-    async def recv(self):
-        global text
-        frame = await self.track.recv()
-        img = frame.to_ndarray(format="bgr24")      # videoframe reformat to ndarray
-        rows = img.shape[0]
-        height = img.shape[1]
-        rgb = img.shape[2]
-        test = np.full((rows, height, rgb), img, np.uint8)   # ndarray to image data for openCV
-        await eyetracking(test, self.s_number)
-        #PrProcessocess(target=eyetracking, args=(test, self.s_number)).start()
-        # Janus 영상 출력
-        #print("x : ", ang1, "y : ", ang2, "Look : ", text)
-        cv2.imshow(str(self.s_number) + 'janus', test)
+        return "caution up"
+    else:
+        cv2.imshow(str(s_number) + 'eye', video)
         cv2.waitKey(1) & 0xFF
-        return frame
 
-class JanusPlugin:
-    def __init__(self, session, url):
-        self._queue = asyncio.Queue()
-        self._session = session
-        self._url = url
-
-    async def send(self, payload):
-        message = {"janus": "message", "transaction": transaction_id()}
-        message.update(payload)
-        async with self._session._http.post(self._url, json=message) as response:
-            data = await response.json()
-            assert data["janus"] == "ack"
-
-        response = await self._queue.get()
-        assert response["transaction"] == message["transaction"]
-        return response
-
-
-class JanusSession:
-    def __init__(self, url):
-        self._http = None
-        self._poll_task = None
-        self._plugins = {}
-        self._root_url = url
-        self._session_url = None
-
-    async def attach(self, plugin_name: str) -> JanusPlugin:
-        message = {
-            "janus": "attach",
-            "plugin": plugin_name,
-            "transaction": transaction_id(),
-        }
-        async with self._http.post(self._session_url, json=message) as response:
-            data = await response.json()
-            assert data["janus"] == "success"
-            plugin_id = data["data"]["id"]
-            plugin = JanusPlugin(self, self._session_url + "/" + str(plugin_id))
-            self._plugins[plugin_id] = plugin
-            return plugin
-
-    async def create(self):
-        self._http = aiohttp.ClientSession()
-        message = {"janus": "create", "transaction": transaction_id()}
-        async with self._http.post(self._root_url, json=message) as response:
-            data = await response.json()
-            assert data["janus"] == "success"
-            session_id = data["data"]["id"]
-            self._session_url = self._root_url + "/" + str(session_id)
-
-        self._poll_task = asyncio.ensure_future(self._poll())
-
-    async def destroy(self):
-        if self._poll_task:
-            self._poll_task.cancel()
-            self._poll_task = None
-
-        if self._session_url:
-            message = {"janus": "destroy", "transaction": transaction_id()}
-            async with self._http.post(self._session_url, json=message) as response:
-                data = await response.json()
-                assert data["janus"] == "success"
-            self._session_url = None
-
-        if self._http:
-            await self._http.close()
-            self._http = None
-
-    async def _poll(self):
-        while True:
-            params = {"maxev": 1, "rid": int(time.time() * 1000)}
-            async with self._http.get(self._session_url, params=params) as response:
-                data = await response.json()
-                if data["janus"] == "event":
-                    plugin = self._plugins.get(data["sender"], None)
-                    if plugin:
-                        await plugin._queue.put(data)
-                    else:
-                        print(data)
-
-
-async def subscribe(session, room, feed, s_number):
-    pc = RTCPeerConnection()
-    pcs.add(pc)
-
-
-    @pc.on("track")
-    async def on_track(track):
-        print("Track %s received" % track.kind)
-        if track.kind == "video":
-            while True:
-                #Process(target=await VideoTransformTrack(track, s_number).recv).start()
-                await VideoTransformTrack(track, s_number).recv()
-    # subscribe
-    plugin = await session.attach("janus.plugin.videoroom")
-    response = await plugin.send(
-        {"body": {"request": "join", "ptype": "subscriber", "room": room, "feed": feed}}
-    )
-    #print(response)
-    # apply offer
-    await pc.setRemoteDescription(
-
-        RTCSessionDescription(
-            sdp=response["jsep"]["sdp"], type=response["jsep"]["type"]
-        )
-    )
-
-    # send answer
-    await pc.setLocalDescription(await pc.createAnswer())
-    response = await plugin.send(
-        {
-            "body": {"request": "start"},
-            "jsep": {
-                "sdp": pc.localDescription.sdp,
-                "trickle": False,
-                "type": pc.localDescription.type,
-            },
-        }
-    )
-    #await recorder.start()
-
-async def run(player, recorder, room, session, test_id):
-    await session.create()
-
-    # join video room
-    plugin = await session.attach("janus.plugin.videoroom")
-    response = await plugin.send(
-        {
-            "body": {
-                "display": "aiortc",
-                "ptype": "publisher",
-                "request": "join",
-                "room": room,
-            }
-        }
-    )
-
-    publishers = response["plugindata"]["data"]["publishers"]
-
-    for publisher in publishers:
-        print("id: %(id)s, display: %(display)s" % publisher)
-
-    maxlength = len(publishers)
-
-    print(maxlength)
-
-    # receive video
-    if maxlength is 0:
-        print('x')
+    # 부정행위가 발생했을 때, 시간 카운트 플래그 설정 후 리턴
+    if int(ang1) > 45 or int(ang1) < -45 or int(ang2) > 30:
+        flag = True
+        return "count up"
+    elif text == "Center":
+        flag = False
+        return "count reset"
     else:
-        for index in range(0, maxlength):
-            if publishers[index]['display'] == "null":
-                pass
-            else:
-                if int(publishers[index]['display']) % 21 is 0:
-                    std_list.append(Student(s_number=publishers[index]["display"], test_id=test_id))
-                    print(std_list[-1])
-                    await subscribe(
-                        session=session, room=room, feed=publishers[index]["id"], s_number=publishers[index]["display"]
-                    )
-                    #Process(target=subscribe, args=(session, room, publishers[index]["id"], publishers[index]["display"])).start()
+        flag = True
+        return "count up"
 
 
-    # exchange media for 10 minutes
-    #print("Exchanging media")
-    await asyncio.sleep(600)
 
 
-if __name__ == "__main__":
-    detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-
-    parser = argparse.ArgumentParser(description="Janus")
-    parser.add_argument("url", help="Janus root URL, e.g. http://localhost:8088/janus")
-    parser.add_argument(
-        "--room",
-        type=int,
-        default=1234,
-        help="The video room ID to join (default: 1234).",
-    ),
-    parser.add_argument("--test_id",type=int, help="TestId"),
-    parser.add_argument("--play-from", help="Read the media from a file and sent it."),
-    parser.add_argument("--record-to", help="Write received media to a file."),
-    parser.add_argument("--verbose", "-v", action="count")
-    args = parser.parse_args()
-    print(args)
-
-    mark_detector = MarkDetector()
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    gaze = GazeTracking()
-    state()
-    face()
-
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-
-    # create signaling and peer connection
-    session = JanusSession(args.url)
-
-    # create media source
-    if args.play_from:
-        player = MediaPlayer(args.play_from)
-    else:
-        player = None
-
-    # create media sink
-    if args.record_to:
-        recorder = MediaRecorder(args.record_to)
-    else:
-        recorder = None
-
-    loop = asyncio.get_event_loop()
-
-    #try:
-    task = loop.run_until_complete(
-        run(player=player, recorder=recorder, room=args.room, session=session, test_id=args.test_id)
-    )
-    loop.run_forever()
-    #p1 = Process(target=loop.run_forever)
-    #p1.start()
-    # except KeyboardInterrupt:
-    #     pass
-    # finally:
-    #     if recorder is not None:
-    #         loop.run_until_complete(recorder.stop())
-    #     loop.run_until_complete(session.destroy())
-    #
-    #     # close peer connections
-    #     coros = [pc.close() for pc in pcs]
-    #     loop.run_until_complete(asyncio.gather(*coros))
+    """
+        #trackingFlag = False
+        #if flag:
+        #return sec_count + 1
+    """
