@@ -46,20 +46,14 @@ std_eye = {
 }
 
 Std_INFO = {
-    "test_id":50,
-    "s_number":21
-}
 
-res = {
-    "s_number":"",                               # 학생 고유 키 값
-    "eye_caution":0                           # 부정행위 감지 카운트
 }
 
 
 text = ""
 
-#sio = socketio.Client()
-#sio.connect('http://3.89.30.234:3001')
+sio = socketio.Client()
+sio.connect('http://3.89.30.234:3001')
 faceFlag = True
 trackingFlag = True
 flag = False
@@ -405,8 +399,8 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 gaze = GazeTracking()
 mark_detector = MarkDetector()
 
-def eyetracking(frame, s_number, eye_count, eye_caution, size):
-    global flag, ang1, ang2, faceFlag, trackingFlag, sio, text, font
+def eyetracking(frame, room, s_number, eye_count, eye_caution, size):
+    global flag, ang1, ang2, faceFlag, trackingFlag, sio, text, font, Std_INFO
 
     # 카메라 정보
     focal_length = size[1]
@@ -417,7 +411,7 @@ def eyetracking(frame, s_number, eye_count, eye_caution, size):
          [0, 0, 1]], dtype="double"
     )
 
-    print('eye_count : ',eye_count)
+    #print('eye_count : ',eye_count)
     #print('eye_caution : ',eye_caution)
 
     video = frame
@@ -431,14 +425,21 @@ def eyetracking(frame, s_number, eye_count, eye_caution, size):
     cv2.waitKey(1) & 0xFF
 
     # 3초 이상 바깥응시, 고개 돌아간 상황
-    if eye_count >= 15:
+    if eye_count >= 15 and eye_caution < 4:
         print("부정행위가 발생했습니다!")
         video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
         eye_caution += 1
 
         if eye_caution < 4:
-            #sio.emit("eyetracking", Std_INFO)
+            Std_INFO = {
+                'test_id':room,
+                's_number':s_number
+            }
+            sio.emit("eyetracking", Std_INFO)
             print(s_number, ':', eye_caution)
+            Std_INFO = {
+
+            }
 
         cv2.imshow(str(s_number) + 'eye', video)
         cv2.waitKey(1) & 0xFF
@@ -458,12 +459,3 @@ def eyetracking(frame, s_number, eye_count, eye_caution, size):
     else:
         flag = True
         return "count up"
-
-
-
-
-    """
-        #trackingFlag = False
-        #if flag:
-        #return sec_count + 1
-    """

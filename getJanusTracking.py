@@ -92,23 +92,20 @@ class VideoTransformTrack(MediaStreamTrack):
 
         if trackingFlag and std_cnt["eye_caution"] <= 3:
             trackingFlag = False
-            text = eye.eyetracking(frame=test, s_number=self.s_number, eye_count=std_cnt["count"],
+            text = eye.eyetracking(frame=test, room=50, s_number=self.s_number, eye_count=std_cnt["count"],
                             eye_caution=std_cnt["eye_caution"], size=size_mat)
 
             if text == "count up":
                 std_cnt["count"] += 1
-                print(std_dic)
-                print(std_eye)
             elif text == "count reset":
                 std_cnt["count"] = 0
-                print(std_dic)
-                print(std_eye)
             elif text == "caution up":
                 std_cnt["count"] = 0
                 std_eye[self.s_number]["eye_caution"] += 1
                 std_cnt["eye_caution"] += 1
                 print(std_dic)
                 print(std_eye)
+
         cv2.putText(test, str(std_cnt["eye_caution"]), (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 2, (128,255,255),3)
         cv2.imshow(str(self.s_number) + 'janus', test)
         cv2.waitKey(1) & 0xFF
@@ -280,8 +277,6 @@ async def run(player, recorder, room, session, test_id, s_number):
                     await subscribe(
                         session=session, room=room, feed=publishers[index]["id"], s_number=std_id
                     )
-                else:
-                    print("can't find s_number's stream")
 
 def janus_connection(url, room, test_id, s_number):
 
