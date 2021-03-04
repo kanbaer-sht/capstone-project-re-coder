@@ -236,7 +236,7 @@ async def subscribe(session, room, feed, s_number, test_id):
         }
     )
 
-async def run(player, recorder, room, session, test_id, s_number):
+async def run(room, session, test_id, s_number):
 
     await session.create()
 
@@ -261,6 +261,7 @@ async def run(player, recorder, room, session, test_id, s_number):
     maxlength = len(publishers)
     print(s_number, ' stream')
     test_num = test_id
+
     # receive video
     if maxlength is s_number:
         print('no stream on janus')
@@ -288,17 +289,12 @@ async def run(player, recorder, room, session, test_id, s_number):
 def janus_connection(url, room, test_id, s_number):
 
     session = JanusSession(url)
-    #state()
+
     face()
-    player = None
-    recorder = None
-    #asyncio.set_event_loop(loop)
+
     loop = asyncio.get_event_loop()
 
     task = loop.run_until_complete(
-        run(player=player, recorder=recorder, room=room, session=session, test_id=test_id, s_number=s_number)
+        run(room=room, session=session, test_id=test_id, s_number=s_number)
     )
     loop.run_forever()
-
-
-#janus_connection("https://re-coder.net/janus", 1234, 50, 21)
