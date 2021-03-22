@@ -20,7 +20,7 @@ from aiohttp import web
 from av import VideoFrame
 
 from tensorflow import keras
-from gaze_tracking import *
+from gaze_tracking import GazeTracking
 from multiprocessing import Process, Queue
 import multiprocessing
 
@@ -429,7 +429,7 @@ def eyetracking(frame, test_id, s_number, eye_count, eye_caution, size):
     #cv2.waitKey(1) & 0xFF
 
     # 3초 이상 바깥응시, 고개 돌아간 상황
-    if eye_count >= 25 and eye_caution <= 4:
+    if eye_count >= 18 and eye_caution <= 20:
         print("부정행위가 발생했습니다!")
         video = cv2.cvtColor(video, cv2.COLOR_RGB2BGR)
         eye_caution += 1

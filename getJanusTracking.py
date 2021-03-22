@@ -18,7 +18,7 @@ from aiohttp import web
 from av import VideoFrame
 
 from tensorflow import keras
-from gaze_tracking import *
+from gaze_tracking import GazeTracking
 from multiprocessing import Process, Queue
 import multiprocessing
 import eye
@@ -268,7 +268,7 @@ async def run(room, session, test_id, s_number):
     else:
         for index in range(0, maxlength):
             std_id = int(publishers[index]['display'])
-            if std_id == "null":
+            if std_id == 'null':
                 pass
             else:
                 if std_id % s_number is 0:
