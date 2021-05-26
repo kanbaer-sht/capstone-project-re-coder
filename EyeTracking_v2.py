@@ -292,8 +292,7 @@ while eye_caution < 3:
     elif gaze.is_center():
         text = "Looking Center"
 
-    cv2.putText(img, text, (90, 60), cv2.FONT_HERSHEY_DUPLEX, 1.6, (147, 58, 31), 2)
-    #cv2.putText(img, str(eye_caution), (90, 100), cv2.FONT_HERSHEY_DUPLEX, 1.6, (147, 58, 31), 2)
+    cv2.putText(img, text, (90, 60), font, 2, (147, 58, 31), 3)
 
     if ret == True:
         faceboxes = mark_detector.extract_cnn_facebox(img)
@@ -309,7 +308,7 @@ while eye_caution < 3:
             shape = marks.astype(np.uint)
 
             # 얼굴 점 찍기
-            #mark_detector.draw_marks(img, marks, color=(0, 255, 0))
+            mark_detector.draw_marks(img, marks, color=(0, 255, 0))
 
             image_points = np.array([
                 shape[30],  # 코끝
@@ -347,24 +346,24 @@ while eye_caution < 3:
                 #cv2.putText(img, str(circle_count), (x, y), font, 0.5, (0, 0, 255), 1)
                 circle_count += 1
 
-            # x축 각도 계산
+            # y축 각도 계산
             try:
                 m = (p2[1] - p1[1]) / (p2[0] - p1[0])
                 ang1 = int(math.degrees(math.atan(m)))
             except:
                 ang1 = 90
 
-            # y축 각도 계산
+            # x축 각도 계산
             try:
                 m = (x2[1] - x1[1]) / (x2[0] - x1[0])
                 ang2 = int(math.degrees(math.atan(-1 / m)))
             except:
                 ang2 = 90
 
-            # x축
-            cv2.putText(img, str(ang1), tuple(p1), font, 2, (128, 255, 255), 3)
             # y축
-            cv2.putText(img, str(ang2), tuple(x1), font, 2, (255, 255, 128), 3)
+            cv2.putText(img, "face vertical:"+str(ang1), (90, 130), font, 2, (56, 155, 238), 3)
+            # x축
+            cv2.putText(img, "face horizontal:"+str(ang2), (90, 200), font, 2, (234, 174, 76), 3)
 
 
         if int(ang1) > 35 or int(ang1) < -35 or int(ang2) > 30:
@@ -381,6 +380,8 @@ while eye_caution < 3:
             #res = json.loads(response.text)
             #print(json.loads(response.text)[0])
             eye_caution += 1
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            cv2.putText(img, "cheating!!", (90, 60), font, 2, (147, 58, 31), 3)
             print(eye_caution)
             #print(res)
             count = 0
