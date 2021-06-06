@@ -214,7 +214,6 @@ async def subscribe(session, room, feed, s_number, test_id):
         {"body": {"request": "join", "ptype": "subscriber", "room": room, "feed": feed}}
     )
 
-    #print(response)
     # apply offer
     await pc.setRemoteDescription(
 

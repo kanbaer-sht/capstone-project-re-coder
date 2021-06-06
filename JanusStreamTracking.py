@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Janus")
     parser.add_argument("url", help="Janus URL", default="https://re-coder.net/janus")
     parser.add_argument("room", type=int, help="room ID to join", default=1234)
-    parser.add_argument("test_id", type=int, help="test_id", default=50)
+    parser.add_argument("test_id", type=int, help="test_id", default=59)
 
     args = parser.parse_args()
 

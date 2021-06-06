@@ -53,7 +53,7 @@ Std_INFO = {
 text = ""
 
 sio = socketio.Client()
-sio.connect('http://3.89.30.234:3001')
+sio.connect('http://54.172.200.97:3001')
 faceFlag = True
 trackingFlag = True
 flag = False
@@ -439,7 +439,7 @@ def eyetracking(frame, test_id, s_number, eye_count, eye_caution, size):
                 'test_id':test_id,
                 's_number':s_number
             }
-            sio.emit("eyetracking", Std_INFO)
+            print(sio.emit("eyetracking", Std_INFO))
             print(s_number, ':', eye_caution)
 
 

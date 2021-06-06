@@ -24,7 +24,7 @@ headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
 
 flag = False
 count = 0
-URL_EYE = "http://3.89.30.234:3000/eyetracking"
+URL_EYE = "http://54.172.200.97:3000/eyetracking"
 ang1, ang2 = 0, 0
 eye_caution = 0
 
