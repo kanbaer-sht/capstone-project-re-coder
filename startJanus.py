@@ -17,15 +17,8 @@ from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
 
 
 
-def callJanus(url, room, test_id,   ber):
-    #getJanus.janus_connection(url, room, test_id, s_number)
-    """
-    loop = asyncio.new_event_loop()
-    threading.Thread(target=getJanus.janus_connection, args=(url, room, test_id, s_number + 0, loop)).start()
-    loop = asyncio.new_event_loop()
-    threading.Thread(target=getJanus.janus_connection, args=(url, room, test_id, s_number + 1, loop)).start()
-    """
-    getJanusTracking.janus_connection(url, room, test_id, s_number)
+#def callJanus(url, room, test_id,   ber):
+#    getJanusTracking.janus_connection(url, room, test_id, s_number)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Janus")
@@ -36,4 +29,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    callJanus(url="https://re-coder.net/janus", room=args.room, test_id=args.test_id, s_number=args.s_number)
+    #callJanus(url="https://re-coder.net/janus", room=args.room, test_id=args.test_id, s_number=args.s_number)
+    getJanusTracking.janus_connection(url=args.url, room=args.room, test_id=args.test_id, s_number= args.s_number)
