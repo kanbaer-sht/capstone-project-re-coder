@@ -15,6 +15,7 @@ import dlib
 import socketio
 import numba
 from numba import jit
+from dotenv import load_dotenv
 
 from aiohttp import web
 from av import VideoFrame
@@ -29,8 +30,11 @@ from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
 
 pcs = set()
 
+load_dotenv(verbose=True)
+
 # keras 코드 warning 숨기기
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 """
 ===================================================================================================================================================================================================
@@ -51,9 +55,9 @@ Std_INFO = {
 
 
 text = ""
-
+SOCKET_URL = os.getenv('SOCKET_URL')
 sio = socketio.Client()
-sio.connect('http://54.172.200.97:3001')
+sio.connect(SOCKET_URL)
 faceFlag = True
 trackingFlag = True
 flag = False

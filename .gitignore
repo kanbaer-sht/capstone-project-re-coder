@@ -1,3 +1,10 @@
 /gaze_tracking
 /venv
 /models
+.env
+dlib_face_recognition_resnet_model_v1.dat
+haarcascade_frontalcatface_extended.xml
+shape_68.dat
+shape_predictor_68_face_landmarks.dat
+eyetrack.py
+EyeTracking_v2.py
